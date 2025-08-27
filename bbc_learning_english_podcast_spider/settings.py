@@ -19,7 +19,7 @@ ADDONS = {}
 #USER_AGENT = "bbc_learning_english_podcast_spider (+http://www.yourdomain.com)"
 
 # Obey robots.txt rules
-ROBOTSTXT_OBEY = True
+ROBOTSTXT_OBEY = False
 
 # Concurrency and throttling settings
 #CONCURRENT_REQUESTS = 16
