@@ -6,7 +6,11 @@
 import scrapy
 
 
-class BbcLearningEnglishPodcastSpiderItem(scrapy.Item):
-    # define the fields for your item here like:
-    # name = scrapy.Field()
-    pass
+class SixMinuteEnglishPodcastSpiderItem(scrapy.Item):
+    number = scrapy.Field()
+    title = scrapy.Field()
+    url = scrapy.Field()
+    pdf_url = scrapy.Field()
+    audio_url = scrapy.Field()
+    release_date = scrapy.Field()
+    release_year = scrapy.Field()
