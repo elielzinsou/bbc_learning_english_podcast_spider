@@ -1,7 +1,8 @@
 # Standard library imports
-import re
-import time
 from pathlib import Path
+import logging
+import time
+import re
 
 # Third-party imports
 import scrapy
@@ -22,20 +23,22 @@ class SixMinuteEnglishSpider(scrapy.Spider):
     custom_settings = {
         "LOG_LEVEL": "WARNING",
         "ITEM_PIPELINES": {
-            # "bbc_learning_english_podcast_spider.pipelines.FileDownloadPipeline": 100,
+            "bbc_learning_english_podcast_spider.pipelines.CustomFilesPipeline": 100,
             "bbc_learning_english_podcast_spider.pipelines.ExcelPipeline": 200,
         },
+        # Root where FilesPipeline will save files
+        "FILES_STORE": str(Path.home() / "Documents" / "BBC_English_Podcast"),
     }
 
     def __init__(self, years=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+
         # years: comma-separated list like "2021,2023"
         # Normalize and keep as strings
-        self.target_years = [y.strip() for y in years.split(",") if y.strip()] if years else None
-        
-        self.podcast_brand = "BBC_English_Podcast"
-        
+        self.target_years = (
+            [y.strip() for y in years.split(",") if y.strip()] if years else None
+        )
+
         # Custom logger
         self.six_minutes_logger = logging.getLogger("six_minutes_english_logger")
         self.six_minutes_logger.setLevel(logging.INFO)
@@ -48,7 +51,9 @@ class SixMinuteEnglishSpider(scrapy.Spider):
         print("")
         print("=" * 80)
         print("🎧 Welcome to BBC Learning English - 6 Minute English Spider")
-        print("This spider extracts podcast metadata (number, title, audio, pdf, date).")
+        print(
+            "This spider extracts podcast metadata (number, title, audio, pdf, date)."
+        )
         if self.target_years:
             print(f"📌 Filtering podcasts for years: {', '.join(self.target_years)}")
         else:
@@ -69,21 +74,15 @@ class SixMinuteEnglishSpider(scrapy.Spider):
         if not match:
             return None, None
         return match.group(1).strip(), match.group(2)
-    
-    @staticmethod
-    def _sanitize_filename(name: str) -> str:
-        """Remove invalid filesystem characters."""
-        
-        return re.sub(r'[\\/*?:"<>|]', "", name).strip()
 
     # --- Spiders -------------------------------------------------------------
     def parse(self, response):
         """
-            The page has two main containers:
-            1) A featured block with the most recent episode
-            2) A wrapper containing all the remaining ones
-                Both share a repeated structure under `.widget-bbcle-coursecontentlist .text`.
-                We extract date+year from the listing and filter BEFORE requesting details.
+        The page has two main containers:
+        1) A featured block with the most recent episode
+        2) A wrapper containing all the remaining ones
+            Both share a repeated structure under `.widget-bbcle-coursecontentlist .text`.
+            We extract date+year from the listing and filter BEFORE requesting details.
         """
         blocks = response.css(".widget-bbcle-coursecontentlist .text")
 
@@ -100,13 +99,18 @@ class SixMinuteEnglishSpider(scrapy.Spider):
             release_date, release_year = self._extract_date_and_year(details_text)
 
             # Year filter
-            if self.target_years and (release_year is None or release_year not in self.target_years):
+            if self.target_years and (
+                release_year is None or release_year not in self.target_years
+            ):
                 continue
 
             full_url = response.urljoin(link)
             if full_url in seen:
                 continue
             seen.add(full_url)
+
+            # For stats: how many episode pages we schedule
+            self.crawler.stats.inc_value("episodes/scheduled")
 
             # Pass pre-extracted metadata via meta
             meta = {
@@ -119,6 +123,8 @@ class SixMinuteEnglishSpider(scrapy.Spider):
 
     def parse_podcast(self, response):
         # Minimal console noise: just show fetched URL and HTTP status
+        if response.status == 200:
+            self.crawler.stats.inc_value("episodes/fetched")
         self.six_minutes_logger.info(f"Fetched {response.url} [{response.status}]")
 
         # Populate item with metadata from meta
@@ -129,40 +135,20 @@ class SixMinuteEnglishSpider(scrapy.Spider):
         item["release_date"] = response.meta.get("release_date")
         item["release_year"] = response.meta.get("release_year")
 
-        # Extract heavy stuff only: PDF & MP3 URLs
-        item["pdf_url"] = response.css(".download.bbcle-download-extension-pdf::attr(href)").get()
-        item["mp3_url"] = response.css(".download.bbcle-download-extension-mp3::attr(href)").get()
+        # Extract heavy stuff only: PDF & MP3 URLs for FilesPipeline
+        item["pdf_url"] = response.css(
+            ".download.bbcle-download-extension-pdf::attr(href)"
+        ).get()
+        item["mp3_url"] = response.css(
+            ".download.bbcle-download-extension-mp3::attr(href)"
+        ).get()
 
         # Fallback if metadata missing
         if not item["title"]:
             item["title"] = (response.css("h1::text").get() or "").strip()
         if not item["number"]:
-            item["number"] = (response.css(".text .details h3 > b::text").get() or "").strip()
-            
-        # Schedule downloads
-        base_dir = Path.home() / "Documents" / self.podcast_brand / self.name.capitalize() 
-        base_dir_subfolder = base_dir / (item["release_year"] or "Unknown_Year")
-        base_dir_subfolder.mkdir(parents=True, exist_ok=True)
-
-        if item["pdf_url"]:
-            pdf_name = self._sanitize_filename(item["title"] or "Unknown") + ".pdf"
-            pdf_path = base_dir_subfolder / pdf_name
-            if not pdf_path.exists():
-                yield scrapy.Request(url=item["pdf_url"], callback=self._save_file, meta={"filepath": str(pdf_path)})
-            item["pdf_path"] = str(pdf_path)
-
-        if item["mp3_url"]:
-            mp3_name = self._sanitize_filename(item["title"] or "Unknown") + ".mp3"
-            mp3_path = base_dir_subfolder / mp3_name
-            if not mp3_path.exists():
-                yield scrapy.Request(url=item["mp3_url"], callback=self._save_file, meta={"filepath": str(mp3_path)})
-            item["mp3_path"] = str(mp3_path)
+            item["number"] = (
+                response.css(".text .details h3 > b::text").get() or ""
+            ).strip()
 
         yield item
-        
-    def _save_file(self, response):
-        path = Path(response.meta["filepath"])
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as f:
-            f.write(response.body)
-        self.six_minutes_logger.info(f"Downloaded: {path.name}")
