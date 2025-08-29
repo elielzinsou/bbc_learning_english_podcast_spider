@@ -15,8 +15,6 @@ What started as two small scripts (`six_minutes_bbc_podcasts.py` and `utility_fu
 
 Since the channel offers more excellent podcasts, I decided to build a more **robust and reusable scraping pipeline** using Scrapy.
 
-At first, I wrote small scripts (`six_minutes_bbc_podcasts.py` and `utility_function.py`) to fetch the episodes I wanted so I could **study them offline at my own pace**.  
-
 As my goals grew — and with the BBC releasing even more valuable podcasts — I wanted to make the process **more robust, automated, and reliable**. That’s how this Scrapy project was born.
 
 ---
@@ -36,8 +34,8 @@ As my goals grew — and with the BBC releasing even more valuable podcasts — 
 Clone the repository and install dependencies using [Pipenv](https://pipenv.pypa.io/):
 
 ```bash
-git clone https://github.com/your-username/python_in_depth.git
-cd python_in_depth
+git clone https://github.com/elielzinsou/bbc_learning_english_podcast_spider.git
+cd bbc_learning_english_podcast_spider
 
 pipenv install --dev
 ```
