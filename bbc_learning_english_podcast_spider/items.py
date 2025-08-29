@@ -10,7 +10,11 @@ class SixMinuteEnglishPodcastSpiderItem(scrapy.Item):
     number = scrapy.Field()
     title = scrapy.Field()
     url = scrapy.Field()
-    pdf_url = scrapy.Field()
-    audio_url = scrapy.Field()
     release_date = scrapy.Field()
     release_year = scrapy.Field()
+    
+    pdf_url = scrapy.Field()
+    mp3_url = scrapy.Field()
+    pdf_path = scrapy.Field()
+    mp3_path = scrapy.Field()
+    
